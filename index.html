@@ -3142,6 +3142,7 @@ body[data-screen="coverScreen"] #coverScreen .cover-toolbar .cover-icon-btn:focu
      configured a project - mpGetDb()/cloudGetAuth() just return null until FIREBASE_CONFIG
      is filled in, and solo play (and a signed-out collection) don't touch any of these. -->
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-check-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
 
@@ -4352,6 +4353,36 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "767058806456",
   appId: "1:767058806456:web:903aa045b3339fd1df964d",
 };
+// App Check (optional): proves to Firestore/Auth that a request is actually coming from this
+// deployed copy of the game - via a reCAPTCHA v3 token - rather than a script that copy-pasted
+// FIREBASE_CONFIG above and is hitting the database directly with it. This matters here because
+// the /matches/{roomCode} Firestore rule intentionally allows open read/write with no login (a
+// multiplayer guest joins by room code, not an account), so App Check is what actually gates
+// that instead of auth.
+//
+// To turn this on:
+//   1. Firebase console -> Build -> App Check -> Apps -> register this web app -> reCAPTCHA v3
+//      (it'll either reuse an existing reCAPTCHA v3 site key or walk you through making one).
+//   2. Paste that site key below in place of APP_CHECK_SITE_KEY.
+//   3. Back in App Check -> APIs, turn on enforcement for Cloud Firestore (and Authentication if
+//      you use it). Start in "Monitor" mode for a bit first if you want to confirm real traffic
+//      still gets through before flipping it to "Enforce".
+// Leaving the placeholder below as-is just skips App Check entirely - the game behaves exactly
+// as it does today, with no behavior change.
+const APP_CHECK_SITE_KEY = "PASTE_YOUR_RECAPTCHA_V3_SITE_KEY_HERE";
+let appCheckActivated = false;
+function mpEnsureAppCheck(){
+  if(appCheckActivated) return;
+  appCheckActivated = true;
+  try{
+    if(!APP_CHECK_SITE_KEY || APP_CHECK_SITE_KEY.indexOf('PASTE_') === 0) return;
+    if(typeof firebase === 'undefined' || !firebase.appCheck) return;
+    firebase.appCheck().activate(
+      new firebase.appCheck.ReCaptchaV3Provider(APP_CHECK_SITE_KEY),
+      true // isTokenAutoRefreshEnabled
+    );
+  }catch(e){}
+}
 let mpDbPromise = null;
 async function mpGetDb(){
   if(!mpDbPromise){
@@ -4360,6 +4391,7 @@ async function mpGetDb(){
       if(typeof firebase === 'undefined') return null;
       try{
         if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+        mpEnsureAppCheck();
         return firebase.firestore();
       }catch(e){ return null; }
     })();
@@ -4375,6 +4407,7 @@ function cloudGetAuth(){
   if(typeof firebase === 'undefined') return null;
   try{
     if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    mpEnsureAppCheck();
     return firebase.auth();
   }catch(e){ return null; }
 }
