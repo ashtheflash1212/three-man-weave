@@ -1,0 +1,10 @@
+# Intermediate audio-processing scratch (analysis WAVs, loudness-matching working files).
+# The final mixed/normalized clips are embedded directly in index.html as base64.
+audio/normalize/
+audio/normalize2/
+audio/*_wave.png
+audio/*-wave.png
+audio/cand_*.wav
+
+# OS/editor cruft
+.DS_Store
